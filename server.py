@@ -77,6 +77,7 @@ async def lint_code(payload: LintRequest):
                 "errors": syntax_issues,
                 "returncode": syntax_result.returncode,
                 "raw_output": syntax_output,
+                "file_content": code  # Include the original code in the response
             }
 
         # Second Pass: Linting
@@ -97,6 +98,7 @@ async def lint_code(payload: LintRequest):
             "errors": all_issues,
             "returncode": lint_result.returncode,
             "raw_output": syntax_output + "\n" + lint_output,
+            "file_content": code  # Include the original code in the response
         }
     except FileNotFoundError as e:
         logger.exception("Verible tool not found.")
