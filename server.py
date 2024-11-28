@@ -43,26 +43,20 @@ async def lint_code(payload: LintRequest):
         logger.error("No module declaration found.")
         raise HTTPException(status_code=400, detail="No module declaration found.")
 
-    # Initialize filenames
-    code_filename = None
-    config_filename = None
+    # Sanitize module name to create a valid filename
+    module_name = re.sub(r'\W+', '_', match.group(1))
 
     try:
-        # Create a temporary file for the code
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".sv", delete=False) as tmp_code_file:
-            tmp_code_file.write(code + "\n")  # Ensure the file ends with a newline
-            code_filename = tmp_code_file.name
+        # Create a temporary file
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".sv", delete=False) as tmp_file:
+            tmp_file.write(code + "\n")  # Ensure the file ends with a newline
+            filename = tmp_file.name
 
-        # Create a temporary configuration file to disable the 'module-filename' rule
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".rules.verible_lint", delete=False) as tmp_config_file:
-            tmp_config_file.write("disable_rules: module-filename\n")
-            config_filename = tmp_config_file.name
+        logger.info(f"Linting file: {filename}")
 
-        logger.info(f"Linting file: {code_filename} with config: {config_filename}")
-
-        # Run Verible lint with the configuration file
+        # Run Verible lint with the 'module-filename' rule disabled
         result = subprocess.run(
-            ["verible-verilog-lint", f"--rules_config={config_filename}", code_filename],
+            ["verible-verilog-lint", f"--lint_rule_disable=module-filename", filename],
             capture_output=True,
             text=True
         )
@@ -81,11 +75,10 @@ async def lint_code(payload: LintRequest):
         logger.exception("An error occurred during linting.")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
-        # Clean up the temporary files
-        for filename in [code_filename, config_filename]:
-            if filename and os.path.exists(filename):
-                os.remove(filename)
-                logger.info(f"Temporary file {filename} removed.")
+        # Clean up the temporary file
+        if 'filename' in locals() and os.path.exists(filename):
+            os.remove(filename)
+            logger.info(f"Temporary file {filename} removed.")
 
 @app.post("/compile")
 async def compile_code(payload: LintRequest):
@@ -100,20 +93,20 @@ async def compile_code(payload: LintRequest):
         logger.error("No module declaration found.")
         raise HTTPException(status_code=400, detail="No module declaration found.")
 
-    # Initialize filename
-    code_filename = None
+    # Sanitize module name to create a valid filename
+    module_name = re.sub(r'\W+', '_', match.group(1))
 
     try:
-        # Create a temporary file for the code
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".sv", delete=False) as tmp_code_file:
-            tmp_code_file.write(code + "\n")  # Ensure the file ends with a newline
-            code_filename = tmp_code_file.name
+        # Create a temporary file
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".sv", delete=False) as tmp_file:
+            tmp_file.write(code + "\n")  # Ensure the file ends with a newline
+            filename = tmp_file.name
 
-        logger.info(f"Compiling file: {code_filename}")
+        logger.info(f"Compiling file: {filename}")
 
         # Run Verible's syntax checker (verible-verilog-syntax)
         result = subprocess.run(
-            ["verible-verilog-syntax", code_filename],
+            ["verible-verilog-syntax", filename],
             capture_output=True,
             text=True
         )
@@ -140,6 +133,6 @@ async def compile_code(payload: LintRequest):
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         # Clean up the temporary file
-        if code_filename and os.path.exists(code_filename):
-            os.remove(code_filename)
-            logger.info(f"Temporary file
+        if 'filename' in locals() and os.path.exists(filename):
+            os.remove(filename)
+            logger.info(f"Temporary file {filename} removed.")
