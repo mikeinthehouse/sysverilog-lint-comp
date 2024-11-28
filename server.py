@@ -56,7 +56,7 @@ async def lint_code(payload: LintRequest):
 
         # Run Verible lint with the 'module-filename' rule disabled
         result = subprocess.run(
-            ["verible-verilog-lint", f"--lint_rule_disable=module-filename", filename],
+            ["verible-verilog-lint", "--rules=-module-filename", filename],
             capture_output=True,
             text=True
         )
