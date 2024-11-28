@@ -30,6 +30,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Regular expression to parse error messages
+error_regex = re.compile(r'^(.*?):(\d+):(\d+): (warning|error): (.*)$')
+
+def parse_linter_output(output):
+    errors = []
+    for line in output.splitlines():
+        match = error_regex.match(line)
+        if match:
+            file_path, line_num, col_num, severity, message = match.groups()
+            errors.append({
+                "line": int(line_num),
+                "column": int(col_num),
+                "severity": severity,
+                "message": message.strip()
+            })
+    return errors
+
 @app.post("/lint")
 async def lint_code(payload: LintRequest):
     code = payload.code.strip()
@@ -50,9 +67,10 @@ async def lint_code(payload: LintRequest):
             [
                 "verible-verilog-lint",
                 "--rules=-module-filename",
-                "--lint_fatal_errors=false",
                 "--parse_fatal=false",
+                "--lint_fatal_errors=false",
                 "--error_limit=0",
+                "--format=gnu",
                 filename
             ],
             capture_output=True,
@@ -64,21 +82,8 @@ async def lint_code(payload: LintRequest):
         # Combine stdout and stderr
         output = result.stdout + result.stderr
 
-        # Parse the linting output to extract line numbers and messages
-        lint_errors = []
-        for line in output.splitlines():
-            # Adjusted regular expression to capture different error formats
-            match = re.match(r'^(.*?):(\d+):(\d+)(?:-(\d+))?: (.*)$', line)
-            if match:
-                file_path, line_num, col_start, col_end, message = match.groups()
-                error_entry = {
-                    "line": int(line_num),
-                    "column_start": int(col_start),
-                    "message": message.strip()
-                }
-                if col_end:
-                    error_entry["column_end"] = int(col_end)
-                lint_errors.append(error_entry)
+        # Parse the linting output
+        lint_errors = parse_linter_output(output)
 
         return {
             "errors": lint_errors,
@@ -118,6 +123,7 @@ async def compile_code(payload: LintRequest):
                 "verible-verilog-syntax",
                 "--parse_fatal=false",
                 "--error_limit=0",
+                "--format=gnu",
                 filename
             ],
             capture_output=True,
@@ -129,21 +135,8 @@ async def compile_code(payload: LintRequest):
         # Combine stdout and stderr
         output = result.stdout + result.stderr
 
-        # Parse the syntax checker output to extract line numbers and messages
-        compile_errors = []
-        for line in output.splitlines():
-            # Adjusted regular expression
-            match = re.match(r'^(.*?):(\d+):(\d+)(?:-(\d+))?: (.*)$', line)
-            if match:
-                file_path, line_num, col_start, col_end, message = match.groups()
-                error_entry = {
-                    "line": int(line_num),
-                    "column_start": int(col_start),
-                    "message": message.strip()
-                }
-                if col_end:
-                    error_entry["column_end"] = int(col_end)
-                compile_errors.append(error_entry)
+        # Parse the syntax checker output
+        compile_errors = parse_linter_output(output)
 
         return {
             "errors": compile_errors,
