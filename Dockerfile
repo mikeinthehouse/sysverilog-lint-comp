@@ -10,7 +10,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
     ca-certificates \
  && wget https://github.com/chipsalliance/verible/releases/download/${VERIBLE_VERSION}/verible-${VERIBLE_VERSION}-${VERIBLE_PLATFORM}.tar.gz \
- && tar -xzf verible-${VERIBLE_VERSION}-${VERIBLE_PLATFORM}.tar.gz -C /usr/local/bin --strip-components=1 \
+ && mkdir /opt/verible \
+ && tar -xzf verible-${VERIBLE_VERSION}-${VERIBLE_PLATFORM}.tar.gz -C /opt/verible --strip-components=1 \
+ && mv /opt/verible/bin/verible-verilog-lint /usr/local/bin/ \
  && rm verible-${VERIBLE_VERSION}-${VERIBLE_PLATFORM}.tar.gz \
  && apt-get purge -y --auto-remove wget \
  && rm -rf /var/lib/apt/lists/*
