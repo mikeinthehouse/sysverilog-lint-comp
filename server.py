@@ -108,23 +108,24 @@ async def compile_code(payload: LintRequest):
         result = subprocess.run(
             ["verible-verilog-syntax", filename],
             capture_output=True,
-            text=True
+            text=True,
+            check=True
         )
 
-        if result.returncode == 0:
-            logger.info("Syntax check passed.")
-            return {
-                "stdout": "Syntax check passed.",
-                "stderr": "",
-                "returncode": 0
-            }
-        else:
-            logger.error("Syntax errors found.")
-            return {
-                "stdout": "",
-                "stderr": result.stderr,
-                "returncode": 1
-            }
+        logger.info("Syntax check passed.")
+        return {
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "returncode": result.returncode
+        }
+
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Syntax checking failed: {e.stderr}")
+        return {
+            "stdout": e.stdout,
+            "stderr": e.stderr,
+            "returncode": e.returncode
+        }
     except FileNotFoundError:
         logger.exception("Verible syntax checker not found.")
         raise HTTPException(status_code=500, detail="Verible syntax checker not found.")
