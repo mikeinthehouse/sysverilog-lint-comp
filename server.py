@@ -104,9 +104,9 @@ async def compile_code(payload: LintRequest):
         
         logger.info(f"Compiling file: {filename}")
         
-        # Run Verible's syntax checker (verible-verilog-parse)
+        # Run Verible's syntax checker (verible-verilog-syntax)
         result = subprocess.run(
-            ["verible-verilog-parse", filename],
+            ["verible-verilog-syntax", filename],
             capture_output=True,
             text=True
         )
@@ -126,10 +126,10 @@ async def compile_code(payload: LintRequest):
                 "returncode": 1
             }
     except FileNotFoundError:
-        logger.exception("Verible parser not found.")
-        raise HTTPException(status_code=500, detail="Verible parser not found.")
+        logger.exception("Verible syntax checker not found.")
+        raise HTTPException(status_code=500, detail="Verible syntax checker not found.")
     except Exception as e:
-        logger.exception("An error occurred during compile checking.")
+        logger.exception("An error occurred during syntax checking.")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         # Clean up the temporary file
