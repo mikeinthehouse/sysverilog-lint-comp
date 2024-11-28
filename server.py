@@ -18,22 +18,21 @@ class LintRequest(BaseModel):
     code: str
 
 # CORS configuration
-origins = [
-    "https://your-netlify-app.netlify.app",  # Replace with your actual frontend URL
-]
+origins = ["*"]  # Allow all origins for testing; update in production
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins during testing
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Regular expression to parse error messages
+# Regular expression to parse errors from Verible output
 error_regex = re.compile(r'^(.*?):(\d+):(\d+): (warning|error): (.*)$')
 
-def parse_linter_output(output):
+def parse_linter_output(output: str):
+    """Parse Verible output to extract errors and warnings."""
     errors = []
     for line in output.splitlines():
         match = error_regex.match(line)
@@ -54,52 +53,38 @@ async def lint_code(payload: LintRequest):
         logger.error("No code provided.")
         raise HTTPException(status_code=400, detail="No code provided.")
 
-    # Create a temporary file with the provided code
     with tempfile.NamedTemporaryFile(mode="w", suffix=".sv", delete=False) as tmp_file:
-        tmp_file.write(code + "\n")  # Ensure the file ends with a newline
+        tmp_file.write(code + "\n")
         filename = tmp_file.name
 
     try:
-        logger.info(f"Linting file: {filename}")
-
-        # Run Verible lint with updated flags
+        logger.info(f"Running linter on file: {filename}")
         result = subprocess.run(
             [
                 "verible-verilog-lint",
-                "--rules=-module-filename",
-                "--parse_fatal=false",
-                "--lint_fatal=false",
-                "--limit=0",
-                "--lint_output_format=gnu",
-                filename
+                "--rules=-module-filename",  # Disable specific linting rule
+                "--lint_output_format=gnu",  # Use consistent output format
+                filename,
             ],
             capture_output=True,
             text=True
         )
 
-        logger.info(f"Linting completed with return code {result.returncode}.")
-
-        # Combine stdout and stderr
         output = result.stdout + result.stderr
+        errors = parse_linter_output(output)
 
-        # Parse the linting output
-        lint_errors = parse_linter_output(output)
-
-        # Include raw output for debugging
         return {
-            "errors": lint_errors,
+            "errors": errors,
             "returncode": result.returncode,
-            "raw_output": output  # Include raw linter output
+            "raw_output": output,
         }
-
     except FileNotFoundError:
-        logger.exception("Verible linter not found.")
-        raise HTTPException(status_code=500, detail="Verible linter not found.")
+        logger.exception("Verible linter tool not found.")
+        raise HTTPException(status_code=500, detail="Verible linter tool not found.")
     except Exception as e:
         logger.exception("An error occurred during linting.")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
-        # Clean up the temporary file
         if os.path.exists(filename):
             os.remove(filename)
             logger.info(f"Temporary file {filename} removed.")
@@ -111,45 +96,33 @@ async def compile_code(payload: LintRequest):
         logger.error("No code provided.")
         raise HTTPException(status_code=400, detail="No code provided.")
 
-    # Create a temporary file with the provided code
     with tempfile.NamedTemporaryFile(mode="w", suffix=".sv", delete=False) as tmp_file:
         tmp_file.write(code + "\n")
         filename = tmp_file.name
 
     try:
-        logger.info(f"Compiling file: {filename}")
-
-        # Run Verible's syntax checker with updated flags
+        logger.info(f"Running syntax checker on file: {filename}")
         result = subprocess.run(
             [
                 "verible-verilog-syntax",
-                "--parse_fatal=false",
-                "--limit=0",
-                "--lint_output_format=gnu",
-                filename
+                "--lint_output_format=gnu",  # Ensure consistent output format
+                filename,
             ],
             capture_output=True,
             text=True
         )
 
-        logger.info(f"Compilation completed with return code {result.returncode}.")
-
-        # Combine stdout and stderr
         output = result.stdout + result.stderr
+        errors = parse_linter_output(output)
 
-        # Parse the syntax checker output
-        compile_errors = parse_linter_output(output)
-
-        # Include raw output for debugging
         return {
-            "errors": compile_errors,
+            "errors": errors,
             "returncode": result.returncode,
-            "raw_output": output
+            "raw_output": output,
         }
-
     except FileNotFoundError:
-        logger.exception("Verible syntax checker not found.")
-        raise HTTPException(status_code=500, detail="Verible syntax checker not found.")
+        logger.exception("Verible syntax checker tool not found.")
+        raise HTTPException(status_code=500, detail="Verible syntax checker tool not found.")
     except Exception as e:
         logger.exception("An error occurred during compilation.")
         raise HTTPException(status_code=500, detail=str(e))
