@@ -13,12 +13,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
  && mkdir /opt/verible \
  && tar -xzf verible-${VERIBLE_VERSION}-${VERIBLE_PLATFORM}.tar.gz -C /opt/verible --strip-components=1 \
  && mv /opt/verible/bin/verible-verilog-lint /usr/local/bin/ \
+ && mv /opt/verible/bin/verible-verilog-parse /usr/local/bin/ \
  && rm verible-${VERIBLE_VERSION}-${VERIBLE_PLATFORM}.tar.gz \
  && apt-get purge -y --auto-remove wget \
  && rm -rf /var/lib/apt/lists/*
 
 # Verify Verible installation
-RUN verible-verilog-lint --version
+RUN verible-verilog-lint --version && verible-verilog-parse --version
 
 # Install Python dependencies without cache
 RUN pip install --no-cache-dir fastapi uvicorn
