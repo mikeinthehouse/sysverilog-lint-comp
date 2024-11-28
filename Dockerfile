@@ -8,11 +8,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
  && wget https://github.com/chipsalliance/verible/releases/download/v0.0-3860-gf3da2ce6/verible-v0.0-3860-gf3da2ce6-linux-static-x86_64.tar.gz \
  && mkdir -p /opt/verible \
  && tar -xzf verible-v0.0-3860-gf3da2ce6-linux-static-x86_64.tar.gz -C /opt/verible --strip-components=1 \
- && mv /opt/verible/bin/verible-verilog-lint /usr/local/bin/ \
- && mv /opt/verible/bin/verible-verilog-syntax /usr/local/bin/ \
- && rm -rf verible* \
+ && rm -rf verible-v0.0-3860-gf3da2ce6-linux-static-x86_64.tar.gz \
  && apt-get purge -y --auto-remove wget \
  && rm -rf /var/lib/apt/lists/*
+
+# Add Verible binaries to PATH
+ENV PATH="/opt/verible/bin:${PATH}"
 
 # Verify Verible installation
 RUN verible-verilog-lint --version && verible-verilog-syntax --version
