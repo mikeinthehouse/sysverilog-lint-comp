@@ -24,9 +24,9 @@ origins = [
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"],  # Allow all origins or specify your frontend URL
     allow_credentials=True,
-    allow_methods=["POST"],
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
@@ -54,15 +54,20 @@ async def lint_code(payload: LintRequest):
 
         logger.info(f"Linting completed with return code {result.returncode}.")
 
+        # Combine stdout and stderr
+        output = result.stdout + result.stderr
+
         # Parse the linting output to extract line numbers and messages
         lint_errors = []
-        for line in result.stdout.splitlines():
-            match = re.match(r'^(.*?):(\d+):(\d+): (.*)$', line)
+        for line in output.splitlines():
+            # Match Verible error messages
+            match = re.match(r'^(.*?):(\d+):(\d+): (warning|error): (.*)$', line)
             if match:
-                file_path, line_num, col_num, message = match.groups()
+                file_path, line_num, col_num, severity, message = match.groups()
                 lint_errors.append({
                     "line": int(line_num),
                     "column": int(col_num),
+                    "severity": severity,
                     "message": message.strip()
                 })
 
@@ -81,7 +86,7 @@ async def lint_code(payload: LintRequest):
         if os.path.exists(filename):
             os.remove(filename)
             logger.info(f"Temporary file {filename} removed.")
-            
+
 @app.post("/compile")
 async def compile_code(payload: LintRequest):
     code = payload.code.strip()
@@ -97,24 +102,29 @@ async def compile_code(payload: LintRequest):
     try:
         logger.info(f"Compiling file: {filename}")
 
-        # Run Verible's linter as a syntax checker
+        # Run Verible's syntax checker
         result = subprocess.run(
-            ["verible-verilog-lint", "--parse_fatal", filename],
+            ["verible-verilog-syntax", filename],
             capture_output=True,
             text=True
         )
 
         logger.info(f"Compilation completed with return code {result.returncode}.")
 
-        # Parse the linter output to extract line numbers and messages
+        # Combine stdout and stderr
+        output = result.stdout + result.stderr
+
+        # Parse the syntax checker output to extract line numbers and messages
         compile_errors = []
-        for line in result.stdout.splitlines():
-            match = re.match(r'^(.*?):(\d+):(\d+): (.*)$', line)
+        for line in output.splitlines():
+            # Match Verible error messages
+            match = re.match(r'^(.*?):(\d+):(\d+): (warning|error): (.*)$', line)
             if match:
-                file_path, line_num, col_num, message = match.groups()
+                file_path, line_num, col_num, severity, message = match.groups()
                 compile_errors.append({
                     "line": int(line_num),
                     "column": int(col_num),
+                    "severity": severity,
                     "message": message.strip()
                 })
 
@@ -123,8 +133,8 @@ async def compile_code(payload: LintRequest):
             "returncode": result.returncode
         }
     except FileNotFoundError:
-        logger.exception("Verible linter not found.")
-        raise HTTPException(status_code=500, detail="Verible linter not found.")
+        logger.exception("Verible syntax checker not found.")
+        raise HTTPException(status_code=500, detail="Verible syntax checker not found.")
     except Exception as e:
         logger.exception("An error occurred during compilation.")
         raise HTTPException(status_code=500, detail=str(e))
