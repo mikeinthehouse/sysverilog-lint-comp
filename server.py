@@ -2,7 +2,6 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import subprocess
-import re
 import logging
 import os
 import tempfile
@@ -32,38 +31,38 @@ app.add_middleware(
 
 @app.post("/lint")
 async def lint_code(payload: LintRequest):
-    # ... [existing code] ...
+    code = payload.code.strip()
+    if not code:
+        logger.error("No code provided.")
+        raise HTTPException(status_code=400, detail="No code provided.")
+
+    # Create a temporary file with the provided code
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".sv", delete=False) as tmp_file:
+        tmp_file.write(code + "\n")  # Ensure the file ends with a newline
+        filename = tmp_file.name
 
     try:
-        # ... [existing code] ...
+        logger.info(f"Linting file: {filename}")
+
+        # Run Verible lint
+        result = subprocess.run(
+            ["verible-verilog-lint", "--rules=-module-filename", filename],
+            capture_output=True,
+            text=True
+        )
+
+        logger.info(f"Linting completed with return code {result.returncode}.")
 
         # Combine stdout and stderr
         output = result.stdout + result.stderr
 
         # Return the raw output for debugging
         return {
-            "errors": lint_errors,
+            "errors": [],  # Empty errors array
             "returncode": result.returncode,
             "raw_output": output  # Include the raw linter output
         }
 
-        # Parse the linting output to extract line numbers and messages
-        lint_errors = []
-        for line in output.splitlines():
-            # Adjusted regular expression
-            match = re.match(r'^(.*?):(\d+):(\d+):\s+(.*)$', line)
-            if match:
-                file_path, line_num, col_num, message = match.groups()
-                lint_errors.append({
-                    "line": int(line_num),
-                    "column": int(col_num),
-                    "message": message.strip()
-                })
-
-        return {
-            "errors": lint_errors,
-            "returncode": result.returncode
-        }
     except FileNotFoundError:
         logger.exception("Verible linter not found.")
         raise HTTPException(status_code=500, detail="Verible linter not found.")
@@ -103,24 +102,13 @@ async def compile_code(payload: LintRequest):
         # Combine stdout and stderr
         output = result.stdout + result.stderr
 
-        # Parse the syntax checker output to extract line numbers and messages
-        compile_errors = []
-        for line in output.splitlines():
-            # Match Verible error messages
-            match = re.match(r'^(.*?):(\d+):(\d+): (warning|error): (.*)$', line)
-            if match:
-                file_path, line_num, col_num, severity, message = match.groups()
-                compile_errors.append({
-                    "line": int(line_num),
-                    "column": int(col_num),
-                    "severity": severity,
-                    "message": message.strip()
-                })
-
+        # Return the raw output for debugging
         return {
-            "errors": compile_errors,
-            "returncode": result.returncode
+            "errors": [],  # Empty errors array
+            "returncode": result.returncode,
+            "raw_output": output  # Include the raw linter output
         }
+
     except FileNotFoundError:
         logger.exception("Verible syntax checker not found.")
         raise HTTPException(status_code=500, detail="Verible syntax checker not found.")
