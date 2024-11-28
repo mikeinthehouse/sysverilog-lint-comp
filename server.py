@@ -36,33 +36,33 @@ async def lint_code(payload: LintRequest):
     if not code:
         logger.error("No code provided.")
         raise HTTPException(status_code=400, detail="No code provided.")
-    
+
     # Extract module name using regex
     match = re.search(r'\bmodule\s+(\w+)', code)
     if not match:
         logger.error("No module declaration found.")
         raise HTTPException(status_code=400, detail="No module declaration found.")
-    
+
     # Sanitize module name to create a valid filename
     module_name = re.sub(r'\W+', '_', match.group(1))
-    
+
     try:
         # Create a temporary file
         with tempfile.NamedTemporaryFile(mode="w", suffix=".sv", delete=False) as tmp_file:
             tmp_file.write(code + "\n")  # Ensure the file ends with a newline
             filename = tmp_file.name
-        
+
         logger.info(f"Linting file: {filename}")
-        
+
         # Run Verible lint with the 'module-filename' rule disabled
         result = subprocess.run(
-            ["verible-verilog-lint", "--rules=all", "--rules-exclude=module-filename", filename],
+            ["verible-verilog-lint", f"--lint_rule_disable=module-filename", filename],
             capture_output=True,
             text=True
         )
-        
+
         logger.info(f"Linting completed with return code {result.returncode}.")
-        
+
         return {
             "stdout": result.stdout,
             "stderr": result.stderr,
@@ -86,31 +86,31 @@ async def compile_code(payload: LintRequest):
     if not code:
         logger.error("No code provided.")
         raise HTTPException(status_code=400, detail="No code provided.")
-    
+
     # Extract module name using regex
     match = re.search(r'\bmodule\s+(\w+)', code)
     if not match:
         logger.error("No module declaration found.")
         raise HTTPException(status_code=400, detail="No module declaration found.")
-    
+
     # Sanitize module name to create a valid filename
     module_name = re.sub(r'\W+', '_', match.group(1))
-    
+
     try:
         # Create a temporary file
         with tempfile.NamedTemporaryFile(mode="w", suffix=".sv", delete=False) as tmp_file:
             tmp_file.write(code + "\n")  # Ensure the file ends with a newline
             filename = tmp_file.name
-        
+
         logger.info(f"Compiling file: {filename}")
-        
+
         # Run Verible's syntax checker (verible-verilog-syntax)
         result = subprocess.run(
             ["verible-verilog-syntax", filename],
             capture_output=True,
             text=True
         )
-        
+
         if result.returncode == 0:
             logger.info("Syntax check passed.")
             return {
