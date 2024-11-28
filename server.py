@@ -28,8 +28,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Regular expression to parse errors from Verible output
-error_regex = re.compile(r'^(.*?):(\d+):(\d+): (warning|error): (.*)$')
+# Regular expression to parse errors from Verible's default output
+error_regex = re.compile(r'^(.*?):(\d+):(\d+): (.*)$')
 
 def parse_linter_output(output: str):
     """Parse Verible output to extract errors and warnings."""
@@ -37,7 +37,9 @@ def parse_linter_output(output: str):
     for line in output.splitlines():
         match = error_regex.match(line)
         if match:
-            file_path, line_num, col_num, severity, message = match.groups()
+            file_path, line_num, col_num, message = match.groups()
+            # Determine severity based on keywords in the message
+            severity = 'error' if 'error' in message.lower() else 'warning'
             errors.append({
                 "line": int(line_num),
                 "column": int(col_num),
@@ -63,7 +65,6 @@ async def lint_code(payload: LintRequest):
             [
                 "verible-verilog-lint",
                 "--rules=-module-filename",  # Disable specific linting rule
-                "--lint_output_format=gnu",  # Use consistent output format
                 filename,
             ],
             capture_output=True,
@@ -105,7 +106,6 @@ async def compile_code(payload: LintRequest):
         result = subprocess.run(
             [
                 "verible-verilog-syntax",
-                "--lint_output_format=gnu",  # Ensure consistent output format
                 filename,
             ],
             capture_output=True,
