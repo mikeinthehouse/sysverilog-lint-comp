@@ -37,24 +37,15 @@ async def lint_code(payload: LintRequest):
         logger.error("No code provided.")
         raise HTTPException(status_code=400, detail="No code provided.")
 
-    # Extract module name using regex
-    match = re.search(r'\bmodule\s+(\w+)', code)
-    if not match:
-        logger.error("No module declaration found.")
-        raise HTTPException(status_code=400, detail="No module declaration found.")
-
-    # Sanitize module name to create a valid filename
-    module_name = re.sub(r'\W+', '_', match.group(1))
+    # Create a temporary file with the provided code
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".sv", delete=False) as tmp_file:
+        tmp_file.write(code + "\n")  # Ensure the file ends with a newline
+        filename = tmp_file.name
 
     try:
-        # Create a temporary file
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".sv", delete=False) as tmp_file:
-            tmp_file.write(code + "\n")  # Ensure the file ends with a newline
-            filename = tmp_file.name
-
         logger.info(f"Linting file: {filename}")
 
-        # Run Verible lint with the 'module-filename' rule disabled
+        # Run Verible lint
         result = subprocess.run(
             ["verible-verilog-lint", "--rules=-module-filename", filename],
             capture_output=True,
@@ -63,9 +54,20 @@ async def lint_code(payload: LintRequest):
 
         logger.info(f"Linting completed with return code {result.returncode}.")
 
+        # Parse the linting output to extract line numbers and messages
+        lint_errors = []
+        for line in result.stdout.splitlines():
+            match = re.match(r'^(.*?):(\d+):(\d+): (.*)$', line)
+            if match:
+                file_path, line_num, col_num, message = match.groups()
+                lint_errors.append({
+                    "line": int(line_num),
+                    "column": int(col_num),
+                    "message": message.strip()
+                })
+
         return {
-            "stdout": result.stdout,
-            "stderr": result.stderr,
+            "errors": lint_errors,
             "returncode": result.returncode
         }
     except FileNotFoundError:
@@ -76,10 +78,10 @@ async def lint_code(payload: LintRequest):
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         # Clean up the temporary file
-        if 'filename' in locals() and os.path.exists(filename):
+        if os.path.exists(filename):
             os.remove(filename)
             logger.info(f"Temporary file {filename} removed.")
-
+            
 @app.post("/compile")
 async def compile_code(payload: LintRequest):
     code = payload.code.strip()
