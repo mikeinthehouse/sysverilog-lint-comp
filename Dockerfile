@@ -2,7 +2,7 @@
 FROM python:3.9-slim
 
 # Set environment variables for Verible version and platform
-ENV VERIBLE_VERSION=v0.0-3860-gf3da2ce6
+ENV VERIBLE_VERSION=v0.0-3980-gb4e3f5c
 ENV VERIBLE_PLATFORM=linux-static-x86_64
 
 # Install required system packages and clean up in one layer
