@@ -5,6 +5,7 @@ import subprocess
 import re
 import logging
 import os
+import tempfile
 
 app = FastAPI()
 
@@ -44,12 +45,12 @@ async def lint_code(payload: LintRequest):
     
     # Sanitize module name to create a valid filename
     module_name = re.sub(r'\W+', '_', match.group(1))
-    filename = f"/tmp/{module_name}.sv"
     
     try:
-        # Write the code to a temporary file
-        with open(filename, "w") as f:
-            f.write(code + "\n")  # Ensure the file ends with a newline
+        # Create a temporary file
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".sv", delete=False) as tmp_file:
+            tmp_file.write(code + "\n")  # Ensure the file ends with a newline
+            filename = tmp_file.name
         
         logger.info(f"Linting file: {filename}")
         
@@ -75,7 +76,7 @@ async def lint_code(payload: LintRequest):
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         # Clean up the temporary file
-        if os.path.exists(filename):
+        if 'filename' in locals() and os.path.exists(filename):
             os.remove(filename)
             logger.info(f"Temporary file {filename} removed.")
 
@@ -94,12 +95,12 @@ async def compile_code(payload: LintRequest):
     
     # Sanitize module name to create a valid filename
     module_name = re.sub(r'\W+', '_', match.group(1))
-    filename = f"/tmp/{module_name}.sv"
     
     try:
-        # Write the code to a temporary file
-        with open(filename, "w") as f:
-            f.write(code + "\n")  # Ensure the file ends with a newline
+        # Create a temporary file
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".sv", delete=False) as tmp_file:
+            tmp_file.write(code + "\n")  # Ensure the file ends with a newline
+            filename = tmp_file.name
         
         logger.info(f"Compiling file: {filename}")
         
@@ -132,6 +133,6 @@ async def compile_code(payload: LintRequest):
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         # Clean up the temporary file
-        if os.path.exists(filename):
+        if 'filename' in locals() and os.path.exists(filename):
             os.remove(filename)
             logger.info(f"Temporary file {filename} removed.")
