@@ -45,9 +45,16 @@ async def lint_code(payload: LintRequest):
     try:
         logger.info(f"Linting file: {filename}")
 
-        # Run Verible lint
+        # Run Verible lint with adjusted flags
         result = subprocess.run(
-            ["verible-verilog-lint", "--rules=-module-filename", filename],
+            [
+                "verible-verilog-lint",
+                "--rules=-module-filename",
+                "--lint_fatal_errors=false",
+                "--parse_fatal=false",
+                "--error_limit=0",
+                filename
+            ],
             capture_output=True,
             text=True
         )
@@ -60,16 +67,18 @@ async def lint_code(payload: LintRequest):
         # Parse the linting output to extract line numbers and messages
         lint_errors = []
         for line in output.splitlines():
-            # Adjusted regular expression
-            match = re.match(r'^(.*?):(\d+):(\d+)-(\d+): (.*)$', line)
+            # Adjusted regular expression to capture different error formats
+            match = re.match(r'^(.*?):(\d+):(\d+)(?:-(\d+))?: (.*)$', line)
             if match:
                 file_path, line_num, col_start, col_end, message = match.groups()
-                lint_errors.append({
+                error_entry = {
                     "line": int(line_num),
                     "column_start": int(col_start),
-                    "column_end": int(col_end),
                     "message": message.strip()
-                })
+                }
+                if col_end:
+                    error_entry["column_end"] = int(col_end)
+                lint_errors.append(error_entry)
 
         return {
             "errors": lint_errors,
@@ -103,9 +112,14 @@ async def compile_code(payload: LintRequest):
     try:
         logger.info(f"Compiling file: {filename}")
 
-        # Run Verible's syntax checker
+        # Run Verible's syntax checker with adjusted flags
         result = subprocess.run(
-            ["verible-verilog-syntax", filename],
+            [
+                "verible-verilog-syntax",
+                "--parse_fatal=false",
+                "--error_limit=0",
+                filename
+            ],
             capture_output=True,
             text=True
         )
@@ -119,15 +133,17 @@ async def compile_code(payload: LintRequest):
         compile_errors = []
         for line in output.splitlines():
             # Adjusted regular expression
-            match = re.match(r'^(.*?):(\d+):(\d+)-(\d+): (.*)$', line)
+            match = re.match(r'^(.*?):(\d+):(\d+)(?:-(\d+))?: (.*)$', line)
             if match:
                 file_path, line_num, col_start, col_end, message = match.groups()
-                compile_errors.append({
+                error_entry = {
                     "line": int(line_num),
                     "column_start": int(col_start),
-                    "column_end": int(col_end),
                     "message": message.strip()
-                })
+                }
+                if col_end:
+                    error_entry["column_end"] = int(col_end)
+                compile_errors.append(error_entry)
 
         return {
             "errors": compile_errors,
