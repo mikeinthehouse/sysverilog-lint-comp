@@ -19,12 +19,12 @@ class LintRequest(BaseModel):
 
 # CORS configuration
 origins = [
-    "https://your-netlify-app.netlify.app",  # Replace with your actual Netlify app URL
+    "https://your-netlify-app.netlify.app",  # Replace with your actual frontend URL
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins or specify your frontend URL
+    allow_origins=["*"],  # Allow all origins during testing
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -85,9 +85,11 @@ async def lint_code(payload: LintRequest):
         # Parse the linting output
         lint_errors = parse_linter_output(output)
 
+        # Include raw output for debugging
         return {
             "errors": lint_errors,
-            "returncode": result.returncode
+            "returncode": result.returncode,
+            "raw_output": output  # Include raw linter output
         }
 
     except FileNotFoundError:
@@ -138,9 +140,11 @@ async def compile_code(payload: LintRequest):
         # Parse the syntax checker output
         compile_errors = parse_linter_output(output)
 
+        # Include raw output for debugging
         return {
             "errors": compile_errors,
-            "returncode": result.returncode
+            "returncode": result.returncode,
+            "raw_output": output  # Include raw linter output
         }
 
     except FileNotFoundError:
