@@ -62,15 +62,15 @@ async def lint_code(payload: LintRequest):
     try:
         logger.info(f"Linting file: {filename}")
 
-        # Run Verible lint with adjusted flags
+        # Run Verible lint with updated flags
         result = subprocess.run(
             [
                 "verible-verilog-lint",
                 "--rules=-module-filename",
                 "--parse_fatal=false",
-                "--lint_fatal_errors=false",
-                "--error_limit=0",
-                "--format=gnu",
+                "--lint_fatal=false",
+                "--limit=0",
+                "--lint_output_format=gnu",
                 filename
             ],
             capture_output=True,
@@ -113,19 +113,19 @@ async def compile_code(payload: LintRequest):
 
     # Create a temporary file with the provided code
     with tempfile.NamedTemporaryFile(mode="w", suffix=".sv", delete=False) as tmp_file:
-        tmp_file.write(code + "\n")  # Ensure the file ends with a newline
+        tmp_file.write(code + "\n")
         filename = tmp_file.name
 
     try:
         logger.info(f"Compiling file: {filename}")
 
-        # Run Verible's syntax checker with adjusted flags
+        # Run Verible's syntax checker with updated flags
         result = subprocess.run(
             [
                 "verible-verilog-syntax",
                 "--parse_fatal=false",
-                "--error_limit=0",
-                "--format=gnu",
+                "--limit=0",
+                "--lint_output_format=gnu",
                 filename
             ],
             capture_output=True,
@@ -144,7 +144,7 @@ async def compile_code(payload: LintRequest):
         return {
             "errors": compile_errors,
             "returncode": result.returncode,
-            "raw_output": output  # Include raw linter output
+            "raw_output": output
         }
 
     except FileNotFoundError:
@@ -154,7 +154,6 @@ async def compile_code(payload: LintRequest):
         logger.exception("An error occurred during compilation.")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
-        # Clean up the temporary file
         if os.path.exists(filename):
             os.remove(filename)
             logger.info(f"Temporary file {filename} removed.")
