@@ -89,53 +89,47 @@ async def compile_code(payload: LintRequest):
         logger.error("No code provided.")
         raise HTTPException(status_code=400, detail="No code provided.")
 
-    # Extract module name using regex
-    match = re.search(r'\bmodule\s+(\w+)', code)
-    if not match:
-        logger.error("No module declaration found.")
-        raise HTTPException(status_code=400, detail="No module declaration found.")
-
-    # Sanitize module name to create a valid filename
-    module_name = re.sub(r'\W+', '_', match.group(1))
+    # Create a temporary file with the provided code
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".sv", delete=False) as tmp_file:
+        tmp_file.write(code + "\n")  # Ensure the file ends with a newline
+        filename = tmp_file.name
 
     try:
-        # Create a temporary file
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".sv", delete=False) as tmp_file:
-            tmp_file.write(code + "\n")  # Ensure the file ends with a newline
-            filename = tmp_file.name
-
         logger.info(f"Compiling file: {filename}")
 
-        # Run Verible's syntax checker (verible-verilog-syntax)
+        # Run Verible's linter as a syntax checker
         result = subprocess.run(
-            ["verible-verilog-syntax", filename],
+            ["verible-verilog-lint", "--parse_fatal", filename],
             capture_output=True,
-            text=True,
-            check=True
+            text=True
         )
 
-        logger.info("Syntax check passed.")
+        logger.info(f"Compilation completed with return code {result.returncode}.")
+
+        # Parse the linter output to extract line numbers and messages
+        compile_errors = []
+        for line in result.stdout.splitlines():
+            match = re.match(r'^(.*?):(\d+):(\d+): (.*)$', line)
+            if match:
+                file_path, line_num, col_num, message = match.groups()
+                compile_errors.append({
+                    "line": int(line_num),
+                    "column": int(col_num),
+                    "message": message.strip()
+                })
+
         return {
-            "stdout": result.stdout,
-            "stderr": result.stderr,
+            "errors": compile_errors,
             "returncode": result.returncode
         }
-
-    except subprocess.CalledProcessError as e:
-        logger.error(f"Syntax checking failed: {e.stderr}")
-        return {
-            "stdout": e.stdout,
-            "stderr": e.stderr,
-            "returncode": e.returncode
-        }
     except FileNotFoundError:
-        logger.exception("Verible syntax checker not found.")
-        raise HTTPException(status_code=500, detail="Verible syntax checker not found.")
+        logger.exception("Verible linter not found.")
+        raise HTTPException(status_code=500, detail="Verible linter not found.")
     except Exception as e:
-        logger.exception("An error occurred during syntax checking.")
+        logger.exception("An error occurred during compilation.")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         # Clean up the temporary file
-        if 'filename' in locals() and os.path.exists(filename):
+        if os.path.exists(filename):
             os.remove(filename)
             logger.info(f"Temporary file {filename} removed.")
