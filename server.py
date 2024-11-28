@@ -5,6 +5,7 @@ import subprocess
 import logging
 import os
 import tempfile
+import re
 
 app = FastAPI()
 
@@ -56,11 +57,23 @@ async def lint_code(payload: LintRequest):
         # Combine stdout and stderr
         output = result.stdout + result.stderr
 
-        # Return the raw output for debugging
+        # Parse the linting output to extract line numbers and messages
+        lint_errors = []
+        for line in output.splitlines():
+            # Adjusted regular expression
+            match = re.match(r'^(.*?):(\d+):(\d+)-(\d+): (.*)$', line)
+            if match:
+                file_path, line_num, col_start, col_end, message = match.groups()
+                lint_errors.append({
+                    "line": int(line_num),
+                    "column_start": int(col_start),
+                    "column_end": int(col_end),
+                    "message": message.strip()
+                })
+
         return {
-            "errors": [],  # Empty errors array
-            "returncode": result.returncode,
-            "raw_output": output  # Include the raw linter output
+            "errors": lint_errors,
+            "returncode": result.returncode
         }
 
     except FileNotFoundError:
@@ -102,11 +115,23 @@ async def compile_code(payload: LintRequest):
         # Combine stdout and stderr
         output = result.stdout + result.stderr
 
-        # Return the raw output for debugging
+        # Parse the syntax checker output to extract line numbers and messages
+        compile_errors = []
+        for line in output.splitlines():
+            # Adjusted regular expression
+            match = re.match(r'^(.*?):(\d+):(\d+)-(\d+): (.*)$', line)
+            if match:
+                file_path, line_num, col_start, col_end, message = match.groups()
+                compile_errors.append({
+                    "line": int(line_num),
+                    "column_start": int(col_start),
+                    "column_end": int(col_end),
+                    "message": message.strip()
+                })
+
         return {
-            "errors": [],  # Empty errors array
-            "returncode": result.returncode,
-            "raw_output": output  # Include the raw linter output
+            "errors": compile_errors,
+            "returncode": result.returncode
         }
 
     except FileNotFoundError:
