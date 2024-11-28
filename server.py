@@ -11,8 +11,8 @@ app = FastAPI()
 class CodeSubmission(BaseModel):
     code: str
 
-@app.post("/compile")
-async def compile_code(payload: LintRequest):
+@app.post("/lint")
+async def lint_code(payload: LintRequest):
     code = payload.code.strip()
     if not code:
         raise HTTPException(status_code=400, detail="No code provided.")
@@ -22,7 +22,8 @@ async def compile_code(payload: LintRequest):
     if not match:
         raise HTTPException(status_code=400, detail="No module declaration found.")
     
-    module_name = match.group(1)
+    # Sanitize module name to create a valid filename
+    module_name = re.sub(r'\W+', '_', match.group(1))
     filename = f"/tmp/{module_name}.sv"
     
     try:
@@ -30,27 +31,20 @@ async def compile_code(payload: LintRequest):
         with open(filename, "w") as f:
             f.write(code + "\n")  # Ensure the file ends with a newline
         
-        # Run Verible's syntax checker with 'module-filename' rule disabled
+        # Run Verible lint with the 'module-filename' rule disabled
         result = subprocess.run(
-            ["verible-verilog-parse", filename],
+            ["verible-verilog-lint", "--rules=all", "--rules-exclude=module-filename", filename],
             capture_output=True,
             text=True
         )
         
-        if result.returncode == 0:
-            return {
-                "stdout": "Syntax check passed.",
-                "stderr": "",
-                "returncode": 0
-            }
-        else:
-            return {
-                "stdout": "",
-                "stderr": result.stderr,
-                "returncode": 1
-            }
+        return {
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "returncode": result.returncode
+        }
     except FileNotFoundError:
-        raise HTTPException(status_code=500, detail="Verible parser not found.")
+        raise HTTPException(status_code=500, detail="Verible linter not found.")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
