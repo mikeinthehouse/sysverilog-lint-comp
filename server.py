@@ -28,8 +28,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Regular expression to parse errors from Verible's default output
-error_regex = re.compile(r'^(.*?):(\d+):(\d+): (.*)$')
+# Regular expression to parse errors in GNU format
+error_regex = re.compile(r'^(.*?):(\d+):(\d+): (warning|error): (.*)$')
 
 def parse_verible_output(output: str):
     """Parse Verible output to extract errors and warnings."""
@@ -37,9 +37,7 @@ def parse_verible_output(output: str):
     for line in output.splitlines():
         match = error_regex.match(line)
         if match:
-            file_path, line_num, col_num, message = match.groups()
-            # Determine severity based on keywords in the message
-            severity = 'error' if 'error' in message.lower() else 'warning'
+            file_path, line_num, col_num, severity, message = match.groups()
             issues.append({
                 "line": int(line_num),
                 "column": int(col_num),
@@ -60,43 +58,49 @@ async def lint_code(payload: LintRequest):
         filename = tmp_file.name
 
     try:
-        # First Pass: Syntax Checking
+        all_issues = []
+
+        # Syntax Checking
         logger.info(f"Running syntax check on file: {filename}")
         syntax_result = subprocess.run(
-            ["verible-verilog-syntax", filename],
+            [
+                "verible-verilog-syntax",
+                "--parse_fatal=false",
+                "--limit=0",
+                "--error_format=gnu",
+                filename
+            ],
             capture_output=True,
             text=True
         )
 
         syntax_output = syntax_result.stdout + syntax_result.stderr
         syntax_issues = parse_verible_output(syntax_output)
+        all_issues.extend(syntax_issues)
 
-        if syntax_result.returncode != 0:
-            # If there are syntax errors, return them without proceeding to linting
-            return {
-                "errors": syntax_issues,
-                "returncode": syntax_result.returncode,
-                "raw_output": syntax_output,
-                "file_content": code  # Include the original code in the response
-            }
-
-        # Second Pass: Linting
+        # Proceed to Linting even if there are syntax errors
         logger.info(f"Running linter on file: {filename}")
         lint_result = subprocess.run(
-            ["verible-verilog-lint", "--rules=-module-filename", filename],
+            [
+                "verible-verilog-lint",
+                "--rules=-module-filename",
+                "--lint_fatal=false",
+                "--parse_fatal=false",
+                "--limit=0",
+                "--lint_output_format=gnu",
+                filename
+            ],
             capture_output=True,
             text=True
         )
 
         lint_output = lint_result.stdout + lint_result.stderr
         lint_issues = parse_verible_output(lint_output)
-
-        # Combine syntax and lint issues
-        all_issues = syntax_issues + lint_issues
+        all_issues.extend(lint_issues)
 
         return {
             "errors": all_issues,
-            "returncode": lint_result.returncode,
+            "returncode": max(syntax_result.returncode, lint_result.returncode),
             "raw_output": syntax_output + "\n" + lint_output,
             "file_content": code  # Include the original code in the response
         }
