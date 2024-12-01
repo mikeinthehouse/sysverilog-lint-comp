@@ -6,6 +6,7 @@ import logging
 import os
 import tempfile
 import re
+import copy
 
 app = FastAPI()
 
@@ -58,64 +59,71 @@ def parse_verible_output(output: str):
 
 @app.post("/lint")
 async def lint_code(payload: LintRequest):
-    code = payload.code.strip()
+    code = payload.code.rstrip()
     if not code:
         logger.error("No code provided.")
         raise HTTPException(status_code=400, detail="No code provided.")
 
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".sv", delete=False) as tmp_file:
-        tmp_file.write(code + "\n")
-        filename = tmp_file.name
+    # Split the code into lines
+    code_lines = code.split('\n')
+    all_issues = []
+    modified_code_lines = copy.deepcopy(code_lines)
+    iterations = 0
+    max_iterations = 100  # Prevent infinite loops
 
-    try:
-        all_issues = []
+    while iterations < max_iterations:
+        # Create a temporary file with the modified code
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".sv", delete=False) as tmp_file:
+            tmp_file.write('\n'.join(modified_code_lines) + "\n")
+            filename = tmp_file.name
 
-        # Syntax Checking
-        logger.info(f"Running syntax check on file: {filename}")
-        syntax_result = subprocess.run(
-            [
-                "verible-verilog-syntax",
-                "--parse_fatal=false",  # Continue processing even if syntax errors are found
-                filename
-            ],
-            capture_output=True,
-            text=True
-        )
+        try:
+            logger.info(f"Running syntax check on file: {filename}")
+            result = subprocess.run(
+                [
+                    "verible-verilog-syntax",
+                    filename
+                ],
+                capture_output=True,
+                text=True
+            )
 
-        syntax_output = syntax_result.stdout + syntax_result.stderr
-        syntax_issues = parse_verible_output(syntax_output)
-        all_issues.extend(syntax_issues)
+            output = result.stdout + result.stderr
+            issues = parse_verible_output(output)
 
-        # Proceed to Linting even if there are syntax errors
-        logger.info(f"Running linter on file: {filename}")
-        lint_result = subprocess.run(
-            [
-                "verible-verilog-lint",
-                "--rules=-module-filename",
-                "--lint_fatal=false",  # Continue processing even if lint violations are found
-                filename
-            ],
-            capture_output=True,
-            text=True
-        )
+            if not issues:
+                # No more errors
+                break
+            else:
+                # Store the first error
+                first_issue = issues[0]
+                line_number = first_issue['line']
+                all_issues.append(first_issue)
 
-        lint_output = lint_result.stdout + lint_result.stderr
-        lint_issues = parse_verible_output(lint_output)
-        all_issues.extend(lint_issues)
+                # Comment out the line with the error
+                if 0 <= line_number - 1 < len(modified_code_lines):
+                    # Preserve indentation
+                    line_content = modified_code_lines[line_number - 1]
+                    if not line_content.strip().startswith('//'):
+                        modified_code_lines[line_number - 1] = '// ' + line_content
+                else:
+                    # Line number out of range
+                    break
+        except FileNotFoundError as e:
+            logger.exception("Verible tool not found.")
+            raise HTTPException(status_code=500, detail=f"Verible tool not found: {e}")
+        except Exception as e:
+            logger.exception("An error occurred during linting.")
+            raise HTTPException(status_code=500, detail=str(e))
+        finally:
+            if os.path.exists(filename):
+                os.remove(filename)
+                logger.info(f"Temporary file {filename} removed.")
 
-        return {
-            "errors": all_issues,
-            "returncode": max(syntax_result.returncode, lint_result.returncode),
-            "raw_output": syntax_output + "\n" + lint_output,
-            "file_content": code  # Include the original code in the response
-        }
-    except FileNotFoundError as e:
-        logger.exception("Verible tool not found.")
-        raise HTTPException(status_code=500, detail=f"Verible tool not found: {e}")
-    except Exception as e:
-        logger.exception("An error occurred during linting.")
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        if os.path.exists(filename):
-            os.remove(filename)
-            logger.info(f"Temporary file {filename} removed.")
+        iterations += 1
+
+    return {
+        "errors": all_issues,
+        "returncode": 1 if all_issues else 0,
+        "file_content": code  # Include the original code in the response
+    }
