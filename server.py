@@ -76,8 +76,8 @@ async def lint_code(payload: LintRequest):
             [
                 "verible-verilog-syntax",
                 "--parse_fatal=false",  # Continue processing even if syntax errors are found
+                 "--error_limit=0",  # Report all syntax errors
                 filename
-                "--error_limit=0",  # Report all syntax errors
             ],
             capture_output=True,
             text=True
