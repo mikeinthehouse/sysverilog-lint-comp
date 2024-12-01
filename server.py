@@ -72,15 +72,15 @@ async def lint_code(payload: LintRequest):
 
         # Syntax Checking
         logger.info(f"Running syntax check on file: {filename}")
-            syntax_result = subprocess.run(
-    [
-        "verible-verilog-syntax",
-        "--parse_fatal=false",  # Continue processing even if syntax errors are found
-        filename
-    ],
-    capture_output=True,
-    text=True
-)
+        syntax_result = subprocess.run(
+            [
+                "verible-verilog-syntax",
+                "--parse_fatal=false",  # Continue processing even if syntax errors are found
+                filename
+            ],
+            capture_output=True,
+            text=True
+        )
 
         syntax_output = syntax_result.stdout + syntax_result.stderr
         syntax_issues = parse_verible_output(syntax_output)
@@ -88,16 +88,16 @@ async def lint_code(payload: LintRequest):
 
         # Proceed to Linting even if there are syntax errors
         logger.info(f"Running linter on file: {filename}")
-    lint_result = subprocess.run(
-    [
-        "verible-verilog-lint",
-        "--rules=-module-filename",
-        "--lint_fatal=false",  # Continue processing even if lint violations are found
-        filename
-    ],
-    capture_output=True,
-    text=True
-)
+        lint_result = subprocess.run(
+            [
+                "verible-verilog-lint",
+                "--rules=-module-filename",
+                "--lint_fatal=false",  # Continue processing even if lint violations are found
+                filename
+            ],
+            capture_output=True,
+            text=True
+        )
 
         lint_output = lint_result.stdout + lint_result.stderr
         lint_issues = parse_verible_output(lint_output)
