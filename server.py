@@ -28,8 +28,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Regular expression to parse errors in GNU format
-error_regex = re.compile(r'^(.*?):(\d+):(\d+): (warning|error): (.*)$')
+# Regular expression to parse errors from Verible's default output
+error_regex = re.compile(r'^(.*?):(\d+):(\d+)(?:-(\d+))?: (.*)$')
 
 def parse_verible_output(output: str):
     """Parse Verible output to extract errors and warnings."""
@@ -37,13 +37,23 @@ def parse_verible_output(output: str):
     for line in output.splitlines():
         match = error_regex.match(line)
         if match:
-            file_path, line_num, col_num, severity, message = match.groups()
-            issues.append({
+            file_path, line_num, col_start, col_end, message = match.groups()
+            # Infer severity based on message content
+            if 'error' in message.lower() or 'syntax error' in message.lower():
+                severity = 'error'
+            elif 'warning' in message.lower():
+                severity = 'warning'
+            else:
+                severity = 'info'  # Default to 'info' if severity is unclear
+            issue = {
                 "line": int(line_num),
-                "column": int(col_num),
+                "column_start": int(col_start),
                 "severity": severity,
                 "message": message.strip()
-            })
+            }
+            if col_end:
+                issue["column_end"] = int(col_end)
+            issues.append(issue)
     return issues
 
 @app.post("/lint")
@@ -65,9 +75,8 @@ async def lint_code(payload: LintRequest):
         syntax_result = subprocess.run(
             [
                 "verible-verilog-syntax",
-                "--parse_fatal=false",
-                "--limit=0",
-                "--error_format=gnu",
+                "--suppress_fatal_errors",
+                "--error_limit=0",
                 filename
             ],
             capture_output=True,
@@ -84,10 +93,8 @@ async def lint_code(payload: LintRequest):
             [
                 "verible-verilog-lint",
                 "--rules=-module-filename",
-                "--lint_fatal=false",
-                "--parse_fatal=false",
-                "--limit=0",
-                "--lint_output_format=gnu",
+                "--suppress_fatal_errors",
+                "--error_limit=0",
                 filename
             ],
             capture_output=True,
