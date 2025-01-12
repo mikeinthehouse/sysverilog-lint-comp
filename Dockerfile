@@ -7,8 +7,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
  && wget https://github.com/chipsalliance/verible/releases/download/v0.0-3899-g75c38daf/verible-v0.0-3899-g75c38daf-linux-static-x86_64.tar.gz \
  && mkdir -p /opt/verible \
- && tar -xzf verible-v0.0-3860-gf3da2ce6-linux-static-x86_64.tar.gz -C /opt/verible --strip-components=1 \
- && rm -rf verible-v0.0-3860-gf3da2ce6-linux-static-x86_64.tar.gz \
+ && tar -xzf verible-v0.0-3899-g75c38daf-linux-static-x86_64.tar.gz -C /opt/verible --strip-components=1 \
+ && rm -rf verible-v0.0-3899-g75c38daf-linux-static-x86_64.tar.gz \
  && apt-get purge -y --auto-remove wget \
  && rm -rf /var/lib/apt/lists/*
 
