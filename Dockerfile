@@ -1,5 +1,5 @@
 # Use the latest stable Python image
-FROM python:3.10-slim
+FROM python:slim
 
 # Install required system packages and Verible
 RUN apt-get update && apt-get install -y --no-install-recommends \
